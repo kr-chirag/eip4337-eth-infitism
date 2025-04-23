@@ -1,0 +1,26 @@
+{
+    "name": "eip4337-eth-infinitism",
+    "version": "1.0.0",
+    "description": "",
+    "main": "index.js",
+    "keywords": [],
+    "author": "kr-chirag",
+    "license": "ISC",
+    "scripts": {
+        "deploy": "hardhat deploy",
+        "verify": "hardhat etherscan-verify"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+        "@openzeppelin/contracts-upgradeable": "^5.3.0",
+        "@openzeppelin/hardhat-upgrades": "^3.9.0",
+        "dotenv": "^16.4.7",
+        "hardhat": "^2.22.19",
+        "hardhat-deploy": "^1.0.1"
+    },
+    "dependencies": {
+        "@openzeppelin/contracts": "^5.3.0",
+        "accountabstraction": "github:eth-infinitism/account-abstraction",
+        "ethers": "^6.13.5"
+    }
+}
