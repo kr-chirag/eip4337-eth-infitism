@@ -5,8 +5,9 @@ import "accountabstraction/contracts/core/BaseAccount.sol";
 import "accountabstraction/contracts/interfaces/IEntryPoint.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-contract MySmartWallet is BaseAccount {
+contract MySmartWallet is Initializable, BaseAccount {
     using ECDSA for bytes32;
     using MessageHashUtils for bytes32;
 
@@ -15,7 +16,10 @@ contract MySmartWallet is BaseAccount {
     IEntryPoint private _entryPoint;
     address private _owner;
 
-    constructor(address admin_, address entryPoint_) {
+    function initialize(
+        address admin_,
+        address entryPoint_
+    ) public initializer {
         _owner = admin_;
         _entryPoint = IEntryPoint(entryPoint_);
     }
@@ -36,8 +40,6 @@ contract MySmartWallet is BaseAccount {
         return 0;
     }
 
-    receive() external payable {}
-
     function withdraw() public {
         require(msg.sender == _owner);
         _entryPoint.withdrawTo(
@@ -46,4 +48,6 @@ contract MySmartWallet is BaseAccount {
         );
         payable(_owner).transfer(address(this).balance);
     }
+
+    receive() external payable {}
 }
