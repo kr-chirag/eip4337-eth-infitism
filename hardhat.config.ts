@@ -12,7 +12,16 @@ for (let i = 1; i <= 5; i++) {
 }
 
 const config: HardhatUserConfig = {
-    solidity: "0.8.28",
+    solidity: {
+        version: "0.8.28",
+        settings: {
+            evmVersion: "cancun",
+            optimizer: {
+                enabled: true,
+                runs: 200, // Recommended default; adjust as needed
+            },
+        },
+    },
     networks: {
         sepolia: {
             url: `https://sepolia.infura.io/v3/${process.env.INFURA_KEY}`,

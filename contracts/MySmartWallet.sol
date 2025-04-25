@@ -6,6 +6,7 @@ import "accountabstraction/contracts/interfaces/IEntryPoint.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "hardhat/console.sol";
 
 contract MySmartWallet is Initializable, BaseAccount {
     using ECDSA for bytes32;
@@ -35,8 +36,10 @@ contract MySmartWallet is Initializable, BaseAccount {
         bytes32 ethSigned = userOpHash.toEthSignedMessageHash();
         address recovered = ethSigned.recover(userOp.signature);
         if (recovered != _owner) {
+            console.log("_validateSignature returned SIG_VALIDATION_FAILED");
             return SIG_VALIDATION_FAILED;
         }
+        console.log("_validateSignature returned 0");
         return 0;
     }
 
@@ -49,5 +52,21 @@ contract MySmartWallet is Initializable, BaseAccount {
         payable(_owner).transfer(address(this).balance);
     }
 
-    receive() external payable {}
+    receive() external payable {
+        // console.log("receive");
+    }
+
+    function _payPrefund(
+        uint256 missingAccountFunds
+    ) internal virtual override {
+        console.log("missingAccountFunds: %d", missingAccountFunds);
+        if (missingAccountFunds != 0) {
+            (bool success, ) = payable(msg.sender).call{
+                value: missingAccountFunds
+            }("");
+            (success);
+            console.log("missingAccountFunds: %d", success);
+            // Ignore failure (its EntryPoint's job to verify, not account.)
+        }
+    }
 }
