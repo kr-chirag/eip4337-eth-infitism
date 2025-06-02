@@ -2,7 +2,7 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 
 export default async (hre: HardhatRuntimeEnvironment) => {
     const { deployer } = await hre.getNamedAccounts();
-    console.log("chainId:", await hre.getChainId());
+    console.log({deployer});
     const demo = await hre.deployments.deploy("MyEntryPoint", {
         from: deployer,
     });

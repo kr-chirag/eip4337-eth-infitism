@@ -1,43 +1,37 @@
-import { ethers } from "ethers";
-import ABI_EntryPoint from "./ABI_EntryPoint.json";
-import ABI_MySmartWallet from "./ABI_MySmartWallet.json";
+import { deployments, ethers, network } from "hardhat";
+import { MyEntryPoint__factory, MySmartWallet__factory } from "../typechain-types";
+import { AddressLike } from "ethers";
 
-import env from "dotenv";
-env.config();
+const rpcUrl = (network.config as { url: string }).url;
+const provider = new ethers.JsonRpcProvider(rpcUrl);
 
-const SEPOLIA_RPC = `https://sepolia.infura.io/v3/${process.env.INFURA_KEY}`;
-const PRIVATE_KEY = `0x${process.env.DEPLOYER_KEY}`;
+async function main() {
+    const [owner, receiver, beneficiary, bundler] = await ethers.getSigners();
 
-const provider = new ethers.JsonRpcProvider(SEPOLIA_RPC);
-const owner = new ethers.Wallet(PRIVATE_KEY, provider);
+    const mySmartWalletDeploymet = await deployments.get("MySmartWallet");
+    const myEntryPointDeployment = await deployments.get("MyEntryPoint");
+    const mySmartWallet = MySmartWallet__factory.connect(mySmartWalletDeploymet.address, owner);
+    const myEntryPoint = MyEntryPoint__factory.connect(myEntryPointDeployment.address, bundler);
 
-const entryPointAddr = "0x4337084D9E255Ff0702461CF8895CE9E3b5Ff108";
-const mySmartWalletAddr = "0x1D1E2346bA2DCBc8FF6EA41FD1cc79897ad69Dd4";
-const acc3Addr = "0x58a70795F6dfdB1c87db819C7D2d2Ca4D8798e56";
-
-const entryPoint = new ethers.Contract(entryPointAddr, ABI_EntryPoint, owner);
-const mySmartWallet = new ethers.Contract(mySmartWalletAddr, ABI_MySmartWallet, owner);
-
-const main = async () => {
-    const nonce = await entryPoint.getNonce(mySmartWalletAddr, 0);
+    const nonce = await myEntryPoint.getNonce(mySmartWalletDeploymet.address, 0);
     const callData = new ethers.Interface(["function execute(address target, uint256 value, bytes calldata data)"]).encodeFunctionData("execute", [
-        acc3Addr,
-        ethers.parseEther("0.01"),
+        receiver.address,
+        ethers.parseEther("0.001"),
         "0x",
     ]);
     const verificationGasLimit = ethers.zeroPadValue(ethers.toBeHex(1000_000), 16);
     const callGasLimit = ethers.zeroPadValue(ethers.toBeHex(1000_000), 16);
     const accountGasLimits = verificationGasLimit + callGasLimit.slice(2);
-    // console.log(accountGasLimits);
-    // console.log(accountGasLimits.length);
-    const maxPriorityFeePerGas = ethers.zeroPadValue(ethers.toBeHex(5e9), 16);
-    const maxFeePerGas = ethers.zeroPadValue(ethers.toBeHex(30e9), 16);
+
+    const feeData = await provider.getFeeData();
+    console.log(feeData);
+    const maxPriorityFeePerGas = ethers.zeroPadValue(ethers.toBeHex(feeData.maxPriorityFeePerGas!), 16);
+    const maxFeePerGas = ethers.zeroPadValue(ethers.toBeHex(feeData.maxFeePerGas!), 16);
     const gasFees = maxPriorityFeePerGas + maxFeePerGas.slice(2);
-    // console.log(gasFees);
-    // console.log(gasFees.length);
+
 
     const userOp = {
-        sender: mySmartWalletAddr,
+        sender: mySmartWalletDeploymet.address,
         nonce,
         initCode: "0x",
         callData,
@@ -48,31 +42,45 @@ const main = async () => {
         signature: "0x",
     };
 
-    const userOpHash = await entryPoint.getUserOpHash(userOp);
+    if (Number(ethers.formatEther(await provider.getBalance(mySmartWalletDeploymet.address))) < 0.1) {
+        console.log("Funding wallet...");
+        await (
+            await owner.sendTransaction({
+                to: mySmartWalletDeploymet.address,
+                value: ethers.parseEther("0.1"),
+            })
+        ).wait();
+    }
+
+    const userOpHash = await myEntryPoint.getUserOpHash(userOp);
 
     const signature = await owner.signMessage(ethers.getBytes(userOpHash));
     userOp.signature = signature;
 
     const ops = [userOp];
-    const beneficiary = "0x6ee7b2cFdDcA903A049Cc445E8ac1388E58f5220";
 
-    console.log("acc3 before balance:", ethers.formatEther(await provider.getBalance(acc3Addr)));
-    console.log("wallet before balance:", ethers.formatEther(await provider.getBalance(mySmartWalletAddr)));
-    console.log("beneficiary before balance:", ethers.formatEther(await provider.getBalance(beneficiary)));
+    await logBalances("Before:");
+    console.log("EntryPoint:", await mySmartWallet.entryPoint());
 
-    const tx = await entryPoint.handleOps(ops, beneficiary);
+    const tx = await myEntryPoint.handleOps(ops, beneficiary);
     const receipt = await tx.wait();
+    await logBalances("after:");
 
-    console.log("acc3 after balance:", ethers.formatEther(await provider.getBalance(acc3Addr)));
-    console.log("wallet after balance:", ethers.formatEther(await provider.getBalance(mySmartWalletAddr)));
-    console.log("beneficiary after balance:", ethers.formatEther(await provider.getBalance(beneficiary)));
-    console.log(receipt);
-};
+    console.log("withdraw wallet...");
+    await (await mySmartWallet.withdraw()).wait();
+    await logBalances("withdrawn:");
 
-async function withdraw() {
-    await mySmartWallet.withdraw();
-    console.log("wallet balance:", ethers.formatEther(await provider.getBalance(mySmartWalletAddr)));
+    async function logBalances(tag: string) {
+        console.log(tag);
+        await logBalance("\towner", owner.address);
+        await logBalance("\treceiver", receiver.address);
+        await logBalance("\tbeneficiary", beneficiary.address);
+        await logBalance("\tbundler", bundler.address);
+        await logBalance("\twallet", mySmartWalletDeploymet.address);
+    }
+    async function logBalance(name: string, address: AddressLike) {
+        console.log(name, "balance:", ethers.formatEther(await provider.getBalance(address)));
+    }
 }
 
-main().catch(console.error);
-// withdraw().catch(console.error);
+main().catch(console.log);
